@@ -71,6 +71,8 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+TIM_HandleTypeDef htim2;
+
 UART_HandleTypeDef huart2;
 DMA_HandleTypeDef hdma_usart2_rx;
 
@@ -91,12 +93,13 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_DMA_Init(void);
 static void MX_USART2_UART_Init(void);
+static void MX_TIM2_Init(void);
 /* USER CODE BEGIN PFP */
-void LED_Init(void);
-void Blink_LEDs(void);
+//void Blink_LEDs(void);
 void DFPlayer_SendCommand(uint8_t, uint8_t, uint8_t);
-void HandlePlaybackStatus(void);
-void ReadPlaybackStatus_DMA(void);
+//void HandlePlaybackStatus(void);
+//void ReadPlaybackStatus_DMA(void);
+void Timeout_CheckPlayback(void);
 uint8_t getRandomNumber(void);
 uint8_t ReadPlaybackStatus(void);
 
@@ -138,7 +141,9 @@ int main(void)
   MX_GPIO_Init();
   MX_DMA_Init();
   MX_USART2_UART_Init();
+  MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
+  HAL_TIM_Base_Start_IT(&htim2);
   //HAL_Delay(1000);
   HAL_UART_Receive_DMA(&huart2, dma_rx_buffer, sizeof(dma_rx_buffer));
   HAL_Delay(1000);
@@ -155,16 +160,12 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  //Blink_LEDs();
       if (HAL_GetTick() - last_query_time >= CHECK_INTERVAL)
 		  {
-    	  	  HAL_UART_Receive_DMA(&huart2, dma_rx_buffer, sizeof(dma_rx_buffer));
 			  last_query_time = HAL_GetTick();
-			  DFPlayer_SendCommand(0x42, 0x00, 0x00); // Query playback status
-			  HAL_GPIO_TogglePin(GPIOA, LED_GREEN_Pin);
+			  HAL_GPIO_WritePin(GPIOA, LED_GREEN_Pin, ReadPlaybackStatus());
 		  }
-	  //checkPlaybackStatus();
-	  //HAL_GPIO_WritePin(GPIOA, LED_GREEN_Pin, ReadPlaybackStatus());
+
   }
   /* USER CODE END 3 */
 }
@@ -217,6 +218,51 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+}
+
+/**
+  * @brief TIM2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM2_Init(void)
+{
+
+  /* USER CODE BEGIN TIM2_Init 0 */
+
+  /* USER CODE END TIM2_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM2_Init 1 */
+
+  /* USER CODE END TIM2_Init 1 */
+  htim2.Instance = TIM2;
+  htim2.Init.Prescaler = 32000-1;
+  htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim2.Init.Period = 250-1;
+  htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
+  if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim2, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM2_Init 2 */
+
+  /* USER CODE END TIM2_Init 2 */
+
 }
 
 /**
@@ -319,31 +365,12 @@ void DFPlayer_SendCommand(uint8_t command, uint8_t param1, uint8_t param2)
 		HAL_UART_Transmit(&huart2, packet, 10, HAL_MAX_DELAY);		// Send packet over UART
 	}
 
-void ReadPlaybackStatusDMA(void)
-	{
-		//HAL_UART_Receive_DMA(&huart2, dma_rx_buffer, sizeof(dma_rx_buffer)); // Start DMA reception
-		//HAL_GPIO_TogglePin(GPIOA, LED_RED_Pin);
-	}
-
-void HandlePlaybackStatus(void)
-	{
-		if (playback_status == 0x00) // Playback stopped
-			{
-				explosion = 0;
-				HAL_GPIO_WritePin(GPIOA, LED_GREEN_Pin, GPIO_PIN_SET);   // Turn on green LED
-				HAL_GPIO_WritePin(GPIOA, LED_AMBER_Pin, GPIO_PIN_RESET); // Turn off amber LED
-				HAL_GPIO_WritePin(GPIOA, LED_RED_Pin, GPIO_PIN_RESET);   // Turn off red LED
-			} else if (playback_status == 0x01) { // Playback active
-				explosion = 1;
-			}
-	}
-
 uint8_t getRandomNumber()
 	{
     	seed = (2*HAL_GetTick() * 1103515245 + 12345) & 0x7FFFFFFF; // LCG formula
     	return (uint8_t)((seed % 3) + 1); // Random number between 1 and 3
 	}
-
+/*
 void Blink_LEDs(void)
 	{
 		if (explosion == 1)
@@ -365,7 +392,8 @@ void Blink_LEDs(void)
 					}
 			}
 	}
-
+	*/
+/*
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 	{
 		HAL_GPIO_TogglePin(GPIOA, LED_RED_Pin);
@@ -379,7 +407,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 					}
 			}
 	}
-
+*/
 uint8_t ReadPlaybackStatus(void)
 	{
 		uint8_t status_packet[10];
@@ -393,6 +421,54 @@ uint8_t ReadPlaybackStatus(void)
 					}
 			}
 		return status; // Return playback status (0x01: Playing, 0x00: Stopped)
+	}
+
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+	{
+		static uint8_t led_state = 0;  // Track LED state
+		if (htim->Instance == TIM2)
+			{
+				if (explosion == 1)
+					{
+						if (led_state == 0)
+							{
+								HAL_GPIO_WritePin(GPIOA, LED_AMBER_Pin, GPIO_PIN_SET);   // Turn ON amber LED
+								HAL_GPIO_WritePin(GPIOA, LED_RED_Pin, GPIO_PIN_RESET);  // Turn OFF red LED
+								led_state = 1;
+							} else {
+								HAL_GPIO_WritePin(GPIOA, LED_AMBER_Pin, GPIO_PIN_RESET); // Turn OFF amber LED
+								HAL_GPIO_WritePin(GPIOA, LED_RED_Pin, GPIO_PIN_SET);     // Turn ON red LED
+								led_state = 0;
+							}
+					} else {
+						HAL_GPIO_WritePin(GPIOA, LED_AMBER_Pin, GPIO_PIN_RESET); 						// Turn off blinking LEDs when explosion is inactive
+						HAL_GPIO_WritePin(GPIOA, LED_RED_Pin, GPIO_PIN_RESET);
+					}
+			}
+	}
+
+void Timeout_CheckPlayback(void)
+	{
+		static uint32_t last_check_time = 0;      								// Tracks the last check time
+		static uint32_t playback_stop_time = 0;  								// Tracks the time when playback was first detected as stopped
+		uint32_t current_time = HAL_GetTick();   								// Get the current system time in milliseconds
+		if ((current_time - last_check_time) >= 100) 							// Check every 100ms
+			{
+				last_check_time = current_time; 								// Update last check time
+				playback_status = ReadPlaybackStatus();
+				if (playback_status == 0)
+					{
+						if (playback_stop_time == 0)
+							{
+								playback_stop_time = current_time; // Start tracking stop time
+							} else if ((current_time - playback_stop_time) >= 500) {
+								explosion = 0;               // Playback has been stopped for 500ms
+								playback_stop_time = 0;      // Reset stop time
+							}
+					} else {
+						playback_stop_time = 0;          // Reset if playback is active
+					}
+			}
 	}
 
 /* USER CODE END 4 */
