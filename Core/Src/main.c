@@ -95,9 +95,10 @@ static void MX_USART2_UART_Init(void);
 void LED_Init(void);
 void Blink_LEDs(void);
 void DFPlayer_SendCommand(uint8_t, uint8_t, uint8_t);
-void checkPlaybackStatus(void);
-void DFPlayer_SendPlaybackStatusQuery(void);
+void HandlePlaybackStatus(void);
+void ReadPlaybackStatus_DMA(void);
 uint8_t getRandomNumber(void);
+uint8_t ReadPlaybackStatus(void);
 
 /* USER CODE END PFP */
 
@@ -138,12 +139,10 @@ int main(void)
   MX_DMA_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
-  HAL_Delay(1000);
+  //HAL_Delay(1000);
   HAL_UART_Receive_DMA(&huart2, dma_rx_buffer, sizeof(dma_rx_buffer));
   HAL_Delay(1000);
   DFPlayer_SendCommand(DFPLAYER_CMD_RESET , 0, 0); // Reset DFPlayer Mini
-  HAL_Delay(1000);
-  DFPlayer_SendCommand(DFPLAYER_CMD_SET_VOL, 0, 30);
   HAL_Delay(1000);
   DFPlayer_SendCommand(DFPLAYER_CMD_PLAY_TRACK, 0x00, getRandomNumber());
   HAL_Delay(1000);
@@ -159,11 +158,13 @@ int main(void)
 	  //Blink_LEDs();
       if (HAL_GetTick() - last_query_time >= CHECK_INTERVAL)
 		  {
-			  DFPlayer_SendPlaybackStatusQuery(); // Send the query command
+    	  	  HAL_UART_Receive_DMA(&huart2, dma_rx_buffer, sizeof(dma_rx_buffer));
 			  last_query_time = HAL_GetTick();
+			  DFPlayer_SendCommand(0x42, 0x00, 0x00); // Query playback status
+			  HAL_GPIO_TogglePin(GPIOA, LED_GREEN_Pin);
 		  }
 	  //checkPlaybackStatus();
-	  HAL_GPIO_WritePin(GPIOA, LED_GREEN_Pin, playback_status);
+	  //HAL_GPIO_WritePin(GPIOA, LED_GREEN_Pin, ReadPlaybackStatus());
   }
   /* USER CODE END 3 */
 }
@@ -185,11 +186,13 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_MSI;
-  RCC_OscInitStruct.MSIState = RCC_MSI_ON;
-  RCC_OscInitStruct.MSICalibrationValue = 0;
-  RCC_OscInitStruct.MSIClockRange = RCC_MSIRANGE_5;
-  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
+  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
+  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
+  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLLMUL_4;
+  RCC_OscInitStruct.PLL.PLLDIV = RCC_PLLDIV_2;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     Error_Handler();
@@ -199,12 +202,12 @@ void SystemClock_Config(void)
   */
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_MSI;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_1) != HAL_OK)
   {
     Error_Handler();
   }
@@ -313,18 +316,16 @@ void DFPlayer_SendCommand(uint8_t command, uint8_t param1, uint8_t param2)
 		packet[8] = checksum & 0xFF;        // Checksum low byte
 		packet[9] = 0xEF;             // End byte
 
-		// Send packet over UART
-		HAL_UART_Transmit(&huart2, packet, 10, HAL_MAX_DELAY);
+		HAL_UART_Transmit(&huart2, packet, 10, HAL_MAX_DELAY);		// Send packet over UART
 	}
 
-void DFPlayer_SendPlaybackStatusQuery(void)
+void ReadPlaybackStatusDMA(void)
 	{
-		DFPlayer_SendCommand(0x42, 0x00, 0x00); // Query playback status
-		HAL_UART_Receive_DMA(&huart2, dma_rx_buffer, sizeof(dma_rx_buffer)); // Start DMA reception
+		//HAL_UART_Receive_DMA(&huart2, dma_rx_buffer, sizeof(dma_rx_buffer)); // Start DMA reception
 		//HAL_GPIO_TogglePin(GPIOA, LED_RED_Pin);
 	}
 
-void checkPlaybackStatus(void)
+void HandlePlaybackStatus(void)
 	{
 		if (playback_status == 0x00) // Playback stopped
 			{
@@ -376,9 +377,22 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 					} else {
 						playback_status = 0xFF; // Invalid response
 					}
-				//HAL_GPIO_TogglePin(GPIOA, LED_RED_Pin);				// Restart DMA reception
-
 			}
+	}
+
+uint8_t ReadPlaybackStatus(void)
+	{
+		uint8_t status_packet[10];
+		uint8_t status = 0x00; 									// Default to an invalid value
+		DFPlayer_SendCommand(0x42, 0x00, 0x00);					// Send the status query command
+		if (HAL_UART_Receive(&huart2, status_packet, 10, 100) == HAL_OK) 		// Wait for the response from the DFPlayer Mini
+			{
+				if (status_packet[3] == 0x42 && status_packet[0] == 0x7E && status_packet[9] == 0xEF) 			// Ensure the response is valid and matches the query
+					{
+						status = status_packet[6]; // Extract the playback status (0x01 or 0x00)
+					}
+			}
+		return status; // Return playback status (0x01: Playing, 0x00: Stopped)
 	}
 
 /* USER CODE END 4 */
