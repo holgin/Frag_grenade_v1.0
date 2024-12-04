@@ -60,8 +60,8 @@
 // Stop Playback
 #define DFPLAYER_CMD_STOP_PLAYBACK 0x16  // Stop playback
 
-#define BLINK_INTERVAL 50 // 250ms interval
-#define CHECK_INTERVAL 200 // Interval in milliseconds
+#define BLINK_INTERVAL 50 // 50ms interval
+#define CHECK_INTERVAL 1000 // Interval in milliseconds
 
 /* USER CODE END PD */
 
@@ -72,6 +72,7 @@
 
 /* Private variables ---------------------------------------------------------*/
 UART_HandleTypeDef huart2;
+DMA_HandleTypeDef hdma_usart2_rx;
 
 /* USER CODE BEGIN PV */
 uint32_t last_check_time = 0; // Tracks the last time the playback was checked
@@ -79,21 +80,25 @@ uint32_t last_blink_time = 0; // Tracks last blink time
 uint32_t seed = 1; // Initialize the seed
 uint8_t led_state = 0;        // Tracks which LED is ON
 uint8_t explosion = 0;
-
+uint8_t status = 0;
+uint8_t dma_rx_buffer[10]; // DMA buffer for UART reception
+volatile uint8_t playback_status = 0xFF; // Default playback status
+uint32_t last_query_time = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
+static void MX_DMA_Init(void);
 static void MX_USART2_UART_Init(void);
 /* USER CODE BEGIN PFP */
 void LED_Init(void);
 void Blink_LEDs(void);
 void DFPlayer_SendCommand(uint8_t, uint8_t, uint8_t);
 void checkPlaybackStatus(void);
-uint8_t DFPlayer_CheckPlaybackStatus(void);
+void DFPlayer_SendPlaybackStatusQuery(void);
 uint8_t getRandomNumber(void);
-uint8_t status = 0;
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -107,6 +112,7 @@ uint8_t status = 0;
   */
 int main(void)
 {
+
   /* USER CODE BEGIN 1 */
 
   /* USER CODE END 1 */
@@ -129,15 +135,18 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
+  HAL_Delay(1000);
+  HAL_UART_Receive_DMA(&huart2, dma_rx_buffer, sizeof(dma_rx_buffer));
+  HAL_Delay(1000);
   DFPlayer_SendCommand(DFPLAYER_CMD_RESET , 0, 0); // Reset DFPlayer Mini
   HAL_Delay(1000);
   DFPlayer_SendCommand(DFPLAYER_CMD_SET_VOL, 0, 30);
   HAL_Delay(1000);
   DFPlayer_SendCommand(DFPLAYER_CMD_PLAY_TRACK, 0x00, getRandomNumber());
-
-  explosion = 1;
+  HAL_Delay(1000);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -147,9 +156,14 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+	  //Blink_LEDs();
+      if (HAL_GetTick() - last_query_time >= CHECK_INTERVAL)
+		  {
+			  DFPlayer_SendPlaybackStatusQuery(); // Send the query command
+			  last_query_time = HAL_GetTick();
+		  }
 	  //checkPlaybackStatus();
-	  Blink_LEDs();
-	  //HAL_GPIO_WritePin(GPIOA, LED_GREEN_Pin, status);
+	  HAL_GPIO_WritePin(GPIOA, LED_GREEN_Pin, playback_status);
   }
   /* USER CODE END 3 */
 }
@@ -211,7 +225,7 @@ static void MX_USART2_UART_Init(void)
 {
 
   /* USER CODE BEGIN USART2_Init 0 */
-
+	__HAL_RCC_USART2_CLK_ENABLE();
   /* USER CODE END USART2_Init 0 */
 
   /* USER CODE BEGIN USART2_Init 1 */
@@ -234,6 +248,22 @@ static void MX_USART2_UART_Init(void)
   /* USER CODE BEGIN USART2_Init 2 */
 
   /* USER CODE END USART2_Init 2 */
+
+}
+
+/**
+  * Enable DMA controller clock
+  */
+static void MX_DMA_Init(void)
+{
+
+  /* DMA controller clock enable */
+  __HAL_RCC_DMA1_CLK_ENABLE();
+
+  /* DMA interrupt init */
+  /* DMA1_Channel2_3_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Channel2_3_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Channel2_3_IRQn);
 
 }
 
@@ -287,33 +317,23 @@ void DFPlayer_SendCommand(uint8_t command, uint8_t param1, uint8_t param2)
 		HAL_UART_Transmit(&huart2, packet, 10, HAL_MAX_DELAY);
 	}
 
-uint8_t DFPlayer_CheckPlaybackStatus(void)
+void DFPlayer_SendPlaybackStatusQuery(void)
 	{
-		uint8_t status_packet[10];
-		uint8_t status1 = 0x00; // Default to an invalid value
-		// Send the status query command
-		DFPlayer_SendCommand(0x42, 0x00, 0x00);
-		if (HAL_UART_Receive(&huart2, status_packet, 10, 100) == HAL_OK) 		// Wait for the response from the DFPlayer Mini
-			{
-				if (status_packet[3] == 0x42 && status_packet[0] == 0x7E && status_packet[9] == 0xEF) 			// Ensure the response is valid and matches the query
-					{
-						status1 = status_packet[6]; // Extract the playback status (0x01 or 0x00)
-					}
-			}
-		return status1; // Return playback status (0x01: Playing, 0x00: Stopped)
+		DFPlayer_SendCommand(0x42, 0x00, 0x00); // Query playback status
+		HAL_UART_Receive_DMA(&huart2, dma_rx_buffer, sizeof(dma_rx_buffer)); // Start DMA reception
+		//HAL_GPIO_TogglePin(GPIOA, LED_RED_Pin);
 	}
 
 void checkPlaybackStatus(void)
 	{
-		uint32_t current_time = HAL_GetTick();    						 	// Get the current system time in milliseconds
-		if ((current_time - last_check_time) >= CHECK_INTERVAL)     		// Check if the interval has elapsed
+		if (playback_status == 0x00) // Playback stopped
 			{
-				last_check_time = current_time; 							// Update the last check time
-				status = DFPlayer_CheckPlaybackStatus();        			// Query the playback status
-				if (status == 0x00)
-					{
-						explosion = 0;
-					}
+				explosion = 0;
+				HAL_GPIO_WritePin(GPIOA, LED_GREEN_Pin, GPIO_PIN_SET);   // Turn on green LED
+				HAL_GPIO_WritePin(GPIOA, LED_AMBER_Pin, GPIO_PIN_RESET); // Turn off amber LED
+				HAL_GPIO_WritePin(GPIOA, LED_RED_Pin, GPIO_PIN_RESET);   // Turn off red LED
+			} else if (playback_status == 0x01) { // Playback active
+				explosion = 1;
 			}
 	}
 
@@ -345,6 +365,21 @@ void Blink_LEDs(void)
 			}
 	}
 
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+	{
+		HAL_GPIO_TogglePin(GPIOA, LED_RED_Pin);
+		if (huart->Instance == USART2)  			// Validate the DFPlayer response
+			{
+				if (dma_rx_buffer[0] == 0x7E && dma_rx_buffer[3] == 0x42 && dma_rx_buffer[9] == 0xEF)
+					{
+						playback_status = dma_rx_buffer[6]; // Extract playback status
+					} else {
+						playback_status = 0xFF; // Invalid response
+					}
+				//HAL_GPIO_TogglePin(GPIOA, LED_RED_Pin);				// Restart DMA reception
+
+			}
+	}
 
 /* USER CODE END 4 */
 
