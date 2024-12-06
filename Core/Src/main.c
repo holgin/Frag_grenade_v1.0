@@ -18,6 +18,10 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "dma.h"
+#include "tim.h"
+#include "usart.h"
+#include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -71,10 +75,6 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
-TIM_HandleTypeDef htim2;
-
-UART_HandleTypeDef huart2;
-DMA_HandleTypeDef hdma_usart2_rx;
 
 /* USER CODE BEGIN PV */
 uint32_t last_check_time = 0; // Tracks the last time the playback was checked
@@ -90,10 +90,6 @@ uint32_t last_query_time = 0;
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
-static void MX_GPIO_Init(void);
-static void MX_DMA_Init(void);
-static void MX_USART2_UART_Init(void);
-static void MX_TIM2_Init(void);
 /* USER CODE BEGIN PFP */
 //void Blink_LEDs(void);
 void DFPlayer_SendCommand(uint8_t, uint8_t, uint8_t);
@@ -142,10 +138,12 @@ int main(void)
   MX_DMA_Init();
   MX_USART2_UART_Init();
   MX_TIM2_Init();
+  MX_TIM21_Init();
   /* USER CODE BEGIN 2 */
   HAL_TIM_Base_Start_IT(&htim2);
+  HAL_TIM_Base_Start_IT(&htim21);
   //HAL_Delay(1000);
-  HAL_UART_Receive_DMA(&huart2, dma_rx_buffer, sizeof(dma_rx_buffer));
+  //HAL_UART_Receive_DMA(&huart2, dma_rx_buffer, sizeof(dma_rx_buffer));
   HAL_Delay(1000);
   DFPlayer_SendCommand(DFPLAYER_CMD_RESET , 0, 0); // Reset DFPlayer Mini
   HAL_Delay(1000);
@@ -218,130 +216,6 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
-}
-
-/**
-  * @brief TIM2 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_TIM2_Init(void)
-{
-
-  /* USER CODE BEGIN TIM2_Init 0 */
-
-  /* USER CODE END TIM2_Init 0 */
-
-  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
-  TIM_MasterConfigTypeDef sMasterConfig = {0};
-
-  /* USER CODE BEGIN TIM2_Init 1 */
-
-  /* USER CODE END TIM2_Init 1 */
-  htim2.Instance = TIM2;
-  htim2.Init.Prescaler = 32000-1;
-  htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 250-1;
-  htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
-  if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-  if (HAL_TIM_ConfigClockSource(&htim2, &sClockSourceConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN TIM2_Init 2 */
-
-  /* USER CODE END TIM2_Init 2 */
-
-}
-
-/**
-  * @brief USART2 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_USART2_UART_Init(void)
-{
-
-  /* USER CODE BEGIN USART2_Init 0 */
-	__HAL_RCC_USART2_CLK_ENABLE();
-  /* USER CODE END USART2_Init 0 */
-
-  /* USER CODE BEGIN USART2_Init 1 */
-
-  /* USER CODE END USART2_Init 1 */
-  huart2.Instance = USART2;
-  huart2.Init.BaudRate = 9600;
-  huart2.Init.WordLength = UART_WORDLENGTH_8B;
-  huart2.Init.StopBits = UART_STOPBITS_1;
-  huart2.Init.Parity = UART_PARITY_NONE;
-  huart2.Init.Mode = UART_MODE_TX_RX;
-  huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-  huart2.Init.OverSampling = UART_OVERSAMPLING_16;
-  huart2.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
-  huart2.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
-  if (HAL_UART_Init(&huart2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN USART2_Init 2 */
-
-  /* USER CODE END USART2_Init 2 */
-
-}
-
-/**
-  * Enable DMA controller clock
-  */
-static void MX_DMA_Init(void)
-{
-
-  /* DMA controller clock enable */
-  __HAL_RCC_DMA1_CLK_ENABLE();
-
-  /* DMA interrupt init */
-  /* DMA1_Channel2_3_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Channel2_3_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Channel2_3_IRQn);
-
-}
-
-/**
-  * @brief GPIO Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_GPIO_Init(void)
-{
-  GPIO_InitTypeDef GPIO_InitStruct = {0};
-/* USER CODE BEGIN MX_GPIO_Init_1 */
-/* USER CODE END MX_GPIO_Init_1 */
-
-  /* GPIO Ports Clock Enable */
-  __HAL_RCC_GPIOA_CLK_ENABLE();
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, LED_GREEN_Pin|LED_AMBER_Pin|LED_RED_Pin, GPIO_PIN_RESET);
-
-  /*Configure GPIO pins : LED_GREEN_Pin LED_AMBER_Pin LED_RED_Pin */
-  GPIO_InitStruct.Pin = LED_GREEN_Pin|LED_AMBER_Pin|LED_RED_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-/* USER CODE BEGIN MX_GPIO_Init_2 */
-/* USER CODE END MX_GPIO_Init_2 */
 }
 
 /* USER CODE BEGIN 4 */
@@ -426,6 +300,7 @@ uint8_t ReadPlaybackStatus(void)
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 	{
 		static uint8_t led_state = 0;  // Track LED state
+//----------------------------------------------------------------------------------
 		if (htim->Instance == TIM2)
 			{
 				if (explosion == 1)
@@ -443,6 +318,17 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 					} else {
 						HAL_GPIO_WritePin(GPIOA, LED_AMBER_Pin, GPIO_PIN_RESET); 						// Turn off blinking LEDs when explosion is inactive
 						HAL_GPIO_WritePin(GPIOA, LED_RED_Pin, GPIO_PIN_RESET);
+					}
+			}
+//----------------------------------------------------------------------------------
+		static uint8_t second_ticks = 0;
+		if (htim->Instance == TIM21)
+			{
+				second_ticks++;
+				if (second_ticks >= 5)
+					{
+						explosion = 1;
+						second_ticks = 0;
 					}
 			}
 	}
@@ -469,6 +355,11 @@ void Timeout_CheckPlayback(void)
 						playback_stop_time = 0;          // Reset if playback is active
 					}
 			}
+	}
+
+void EXTI1_IRQHandler(void)
+	{
+		HAL_GPIO_EXTI_IRQHandler(Fuze_Pin); // Call HAL to handle the interrupt
 	}
 
 /* USER CODE END 4 */

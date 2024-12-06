@@ -3,6 +3,7 @@
 	<name>Frag_grenade_v1.0</name>
 	<comment></comment>
 	<projects>
+		<project>Frag_grenade_v1.0</project>
 	</projects>
 	<buildSpec>
 		<buildCommand>

@@ -63,6 +63,9 @@ void Error_Handler(void);
 #define LED_AMBER_GPIO_Port GPIOA
 #define LED_RED_Pin GPIO_PIN_6
 #define LED_RED_GPIO_Port GPIOA
+#define Fuze_Pin GPIO_PIN_1
+#define Fuze_GPIO_Port GPIOB
+#define Fuze_EXTI_IRQn EXTI0_1_IRQn
 
 /* USER CODE BEGIN Private defines */
 
