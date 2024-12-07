@@ -60,11 +60,11 @@ all: main-build
 main-build: Frag_grenade_v1.0.elf secondary-outputs
 
 dependents:
-	-cd C:/Users/KkiJ/Desktop/DIY/Frag_grenade_v1.0/Release && $(MAKE) clean all
+	-cd C:/Users/PC/STM32CubeIDE/workspace_1.14.0/Frag_grenade_v1.0/Release && $(MAKE) all
 
 # Tool invocations
-Frag_grenade_v1.0.elf Frag_grenade_v1.0.map: $(OBJS) $(USER_OBJS) C:/Users/KkiJ/Desktop/DIY/Frag_grenade_v1.0/Release/Frag_grenade_v1.0.elf C:\Users\KkiJ\Desktop\DIY\Frag_grenade_v1.0\STM32L011F4UX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-gcc -o "Frag_grenade_v1.0.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m0plus -T"C:\Users\KkiJ\Desktop\DIY\Frag_grenade_v1.0\STM32L011F4UX_FLASH.ld" --specs=nosys.specs -Wl,-Map="Frag_grenade_v1.0.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+Frag_grenade_v1.0.elf Frag_grenade_v1.0.map: $(OBJS) $(USER_OBJS) C:/Users/PC/STM32CubeIDE/workspace_1.14.0/Frag_grenade_v1.0/Release/Frag_grenade_v1.0.elf C:\Users\PC\STM32CubeIDE\workspace_1.14.0\Frag_grenade_v1.0\STM32L011F4UX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-gcc -o "Frag_grenade_v1.0.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m0plus -T"C:\Users\PC\STM32CubeIDE\workspace_1.14.0\Frag_grenade_v1.0\STM32L011F4UX_FLASH.ld" --specs=nosys.specs -Wl,-Map="Frag_grenade_v1.0.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 
@@ -93,6 +93,6 @@ warn-no-linker-script-specified:
 	@echo 'Warning: No linker script specified. Check the linker settings in the build configuration.'
 
 .PHONY: all clean dependents main-build fail-specified-linker-script-missing warn-no-linker-script-specified
-C:/Users/KkiJ/Desktop/DIY/Frag_grenade_v1.0/Release/Frag_grenade_v1.0.elf:
+C:/Users/PC/STM32CubeIDE/workspace_1.14.0/Frag_grenade_v1.0/Release/Frag_grenade_v1.0.elf:
 
 -include ../makefile.targets
