@@ -36,38 +36,39 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 // DFPlayer Mini Command Defines
-#define DFPLAYER_CMD_NEXT          	0x01  // Play next track
-#define DFPLAYER_CMD_PREV          	0x02  // Play previous track
-#define DFPLAYER_CMD_PLAY_TRACK    	0x03  // Play specific track
-#define DFPLAYER_CMD_INC_VOL       	0x04  // Increase volume
-#define DFPLAYER_CMD_DEC_VOL       	0x05  // Decrease volume
-#define DFPLAYER_CMD_SET_VOL       	0x06  // Set volume (0-30)
-#define DFPLAYER_CMD_SET_EQ        	0x07  // Set EQ mode (0-Normal, 1-Pop, 2-Rock, etc.)
-#define DFPLAYER_CMD_PLAYBACK_MODE 	0x08  // Set playback mode (single loop, repeat all, etc.)
-#define DFPLAYER_CMD_RESET         	0x0C  // Reset DFPlayer Mini
-#define DFPLAYER_CMD_PLAY          	0x0D  // Resume playback
-#define DFPLAYER_CMD_PAUSE         	0x0E  // Pause playback
-#define DFPLAYER_CMD_LOOP_TRACK    	0x19  // Loop current track
+#define DFPLAYER_CMD_NEXT          	0x01  	// Play next track
+#define DFPLAYER_CMD_PREV          	0x02  	// Play previous track
+#define DFPLAYER_CMD_PLAY_TRACK    	0x03  	// Play specific track
+#define DFPLAYER_CMD_INC_VOL       	0x04  	// Increase volume
+#define DFPLAYER_CMD_DEC_VOL       	0x05  	// Decrease volume
+#define DFPLAYER_CMD_SET_VOL       	0x06  	// Set volume (0-30)
+#define DFPLAYER_CMD_SET_EQ        	0x07 	// Set EQ mode (0-Normal, 1-Pop, 2-Rock, etc.)
+#define DFPLAYER_CMD_PLAYBACK_MODE 	0x08  	// Set playback mode (single loop, repeat all, etc.)
+#define DFPLAYER_CMD_RESET         	0x0C  	// Reset DFPlayer Mini
+#define DFPLAYER_CMD_PLAY          	0x0D  	// Resume playback
+#define DFPLAYER_CMD_PAUSE         	0x0E  	// Pause playback
+#define DFPLAYER_CMD_LOOP_TRACK    	0x19  	// Loop current track
 
 // Query Commands
-#define DFPLAYER_CMD_QUERY_STATUS  	0x42  // Query status
-#define DFPLAYER_CMD_QUERY_VOL     	0x43  // Query volume
-#define DFPLAYER_CMD_QUERY_EQ      	0x44  // Query EQ mode
-#define DFPLAYER_CMD_QUERY_PLAY    	0x45  // Query playback status
-#define DFPLAYER_CMD_QUERY_FILES   	0x48  // Query total number of files
+#define DFPLAYER_CMD_QUERY_STATUS  	0x42  	// Query status
+#define DFPLAYER_CMD_QUERY_VOL     	0x43 	// Query volume
+#define DFPLAYER_CMD_QUERY_EQ      	0x44  	// Query EQ mode
+#define DFPLAYER_CMD_QUERY_PLAY    	0x45  	// Query playback status
+#define DFPLAYER_CMD_QUERY_FILES   	0x48  	// Query total number of files
 
 // Advanced Playback
-#define DFPLAYER_CMD_PLAY_FOLDER   	0x12  // Play track from specific folder
-#define DFPLAYER_CMD_LOOP_FOLDER   	0x17  // Loop all tracks in a folder
-#define DFPLAYER_CMD_RANDOM_PLAY   	0x18  // Random playback
+#define DFPLAYER_CMD_PLAY_FOLDER   	0x12  	// Play track from specific folder
+#define DFPLAYER_CMD_LOOP_FOLDER   	0x17  	// Loop all tracks in a folder
+#define DFPLAYER_CMD_RANDOM_PLAY   	0x18  	// Random playback
 
 // Stop Playback
-#define DFPLAYER_CMD_STOP_PLAYBACK 	0x16  // Stop playback
+#define DFPLAYER_CMD_STOP_PLAYBACK 	0x16  	// Stop playback
 
 #define BLINK_INTERVAL 				50 		// 50ms interval
 #define CHECK_INTERVAL 				1000 	// Interval in milliseconds
-#define COOLDOWN_TIME 				10000 	// 15 minutes, time in ms
-#define TRIGGER_TIME 				4000	//in ms,
+#define SHORT_COOLDOWN 				1000    // 1 second in milliseconds
+#define LONG_COOLDOWN  				900000  // 15 minutes in milliseconds
+#define TRIGGER_TIME 				4000	// in ms,
 
 /* USER CODE END PD */
 
@@ -90,21 +91,22 @@ typedef enum {
 GrenadeState currentState = IDLE;
 
 
-uint32_t last_check_time = 0; // Tracks the last time the playback was checked
-uint32_t last_blink_time = 0; // Tracks last blink time
-uint32_t seed = 1; // Initialize the seed
-uint8_t led_state = 0;        // Tracks which LED is ON
+uint32_t last_check_time = 0; 					// Tracks the last time the playback was checked
+uint32_t last_blink_time = 0; 					// Tracks last blink time
+uint32_t seed = 1; 								// Initialize the seed
+uint8_t led_state = 0;        					// Tracks which LED is ON
 uint8_t blinking = 0;
-uint8_t status = 0;
 uint8_t fuze_present = 0;
 uint8_t exploded = 0;
-uint8_t dma_rx_buffer[10]; // DMA buffer for UART reception
-volatile uint8_t playback_status = 0xFF; // Default playback status
+volatile uint8_t playback_status = 0xFF; 		// Default playback status
 uint32_t last_query_time = 0;
 uint32_t cooldownStartTime = 0;
 uint32_t ArmedStartTime = 0;
 uint32_t explosionStartTime = 0;
 uint32_t refresh_time = 0;
+uint32_t cooldown_time = LONG_COOLDOWN; 		// Default cooldown time
+uint8_t toggle_count = 0;
+uint32_t last_toggle_time = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -115,6 +117,7 @@ void SetAmberPWM(uint8_t);
 void PlayExplosionSound(void);
 void HandleState(void);
 void TurnOffAllLEDs(void);
+void CheckFuzeToggles(void);
 uint8_t getRandomNumber(void);
 uint8_t CalculateDutyCycle(uint32_t, uint32_t);
 uint32_t RoundedDivision(uint32_t, uint32_t);
@@ -278,7 +281,6 @@ void HandleState()
 							exploded = 0;               // Reset explosion flag for future use
 							cooldownStartTime = HAL_GetTick();
 						}
-
 					break;
 
 				case COOLDOWN:
@@ -286,7 +288,7 @@ void HandleState()
 					HAL_GPIO_WritePin(GPIOA, LED_RED_Pin, 	GPIO_PIN_RESET);
 					SetAmberPWM(0);
 					HAL_GPIO_WritePin(GPIOA, LED_GREEN_Pin, GPIO_PIN_SET);
-					if ((HAL_GetTick() - cooldownStartTime) >= COOLDOWN_TIME) // 15 min cooldown
+					if ((HAL_GetTick() - cooldownStartTime) >= cooldown_time)
 						{
 							currentState = SAFE;
 						}
@@ -360,6 +362,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 
 void EXTI1_IRQHandler(void)
 	{
+		CheckFuzeToggles();
 		HAL_GPIO_EXTI_IRQHandler(Fuze_Pin);  // Pass the pin to HAL handler
 	}
 
@@ -398,6 +401,23 @@ uint32_t RoundedDivision(uint32_t numerator, uint32_t divisor)
 		return (numerator + (divisor / 2)) / divisor;
 	}
 
+
+void CheckFuzeToggles(void)
+	{
+		uint32_t current_time = HAL_GetTick();						// If time since last toggle exceeds the 3-second window, reset count
+		if ((current_time - last_toggle_time) > TIME_WINDOW)
+			{
+				toggle_count = 0;
+			}
+		toggle_count++; 											// Increment toggle count and update last toggle time
+		last_toggle_time = current_time;
+		if (toggle_count >= TOGGLE_LIMIT) 							// Check if the toggle count has reached the limit within the time window
+			{
+				cooldown_time = (cooldown_time == LONG_COOLDOWN) ? SHORT_COOLDOWN : LONG_COOLDOWN;		// Toggle cooldown time between short and long durations
+				toggle_count = 0; 									// Reset toggle count
+
+			}
+	}
 
 /* USER CODE END 4 */
 
