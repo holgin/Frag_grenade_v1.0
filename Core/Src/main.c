@@ -66,8 +66,8 @@
 
 #define BLINK_INTERVAL 				50 		// 50ms interval
 #define CHECK_INTERVAL 				1000 	// Interval in milliseconds
-#define COOLDOWN_TIME 				5000 	// 15 minutes, time in ms
-#define TRIGGER_TIME 				1500	//in ms,
+#define COOLDOWN_TIME 				10000 	// 15 minutes, time in ms
+#define TRIGGER_TIME 				4000	//in ms,
 
 /* USER CODE END PD */
 
@@ -102,23 +102,23 @@ uint8_t dma_rx_buffer[10]; // DMA buffer for UART reception
 volatile uint8_t playback_status = 0xFF; // Default playback status
 uint32_t last_query_time = 0;
 uint32_t cooldownStartTime = 0;
+uint32_t ArmedStartTime = 0;
 uint32_t explosionStartTime = 0;
+uint32_t refresh_time = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
-//void Blink_LEDs(void);
 void DFPlayer_SendCommand(uint8_t, uint8_t, uint8_t);
-//void HandlePlaybackStatus(void);
-//void ReadPlaybackStatus_DMA(void);
+void SetAmberPWM(uint8_t);
 void PlayExplosionSound(void);
-void Timeout_CheckPlayback(void);
 void HandleState(void);
 void TurnOffAllLEDs(void);
-void debugBlink(void);
 uint8_t getRandomNumber(void);
-uint8_t ReadPlaybackStatus(void);
+uint8_t CalculateDutyCycle(uint32_t, uint32_t);
+uint32_t RoundedDivision(uint32_t, uint32_t);
+
 
 /* USER CODE END PFP */
 
@@ -161,7 +161,7 @@ int main(void)
   MX_TIM2_Init();
   MX_TIM21_Init();
   /* USER CODE BEGIN 2 */
-  HAL_TIM_Base_Start_IT(&htim2);
+  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
   HAL_TIM_Base_Start_IT(&htim21);
   HAL_Delay(100);
   DFPlayer_SendCommand(DFPLAYER_CMD_RESET , 0, 0); // Reset DFPlayer Mini
@@ -175,9 +175,12 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  HandleState();
-	  fuze_present = HAL_GPIO_ReadPin(GPIOA, Fuze_Pin);
-
+	if (HAL_GetTick() - refresh_time >= 100)
+		{
+		  HandleState();
+		  fuze_present = HAL_GPIO_ReadPin(GPIOB, Fuze_Pin);
+		  refresh_time = HAL_GetTick();
+		}
 	}
   /* USER CODE END 3 */
 }
@@ -236,8 +239,6 @@ void SystemClock_Config(void)
 
 void HandleState()
 	{
-		static uint32_t explosionStartTime = 0;
-		static uint32_t cooldownStartTime = 0;
 		switch (currentState)
 			{
 				case IDLE: 															//default state
@@ -248,15 +249,17 @@ void HandleState()
 					if (fuze_present == 0)
 						{
 							// time recorded in EXTI triggering the ARMED state
-							HAL_GPIO_WritePin(GPIOA, LED_RED_Pin, GPIO_PIN_SET);	// indicate getting closer to explosion
-							if ((HAL_GetTick() - explosionStartTime) >= TRIGGER_TIME) 		// 3-5 sec delay
+							SetAmberPWM(CalculateDutyCycle(HAL_GetTick() - ArmedStartTime, TRIGGER_TIME)); 		// indicate getting closer to explosion
+							if ((HAL_GetTick() - ArmedStartTime) >= TRIGGER_TIME) 		// 3-5 sec delay
 								{
 									currentState = EXPLODING;
-									explosionStartTime = 0;
+									ArmedStartTime = 0;
 								}
-						} else { 													// fuze is reinserted
-							explosionStartTime = 0;
+						} else if (fuze_present == 1) { 													// fuze is reinserted
+							ArmedStartTime = 0;
 							currentState = IDLE;
+							blinking = 0;
+							SetAmberPWM(0);
 						}
 					break;
 
@@ -265,16 +268,24 @@ void HandleState()
 						{
 							PlayExplosionSound();
 							exploded = 1;
+							explosionStartTime = HAL_GetTick(); // Record the start time of explosion
 						}
 					blinking = 1;
-					Timeout_CheckPlayback();
+				    if ((HAL_GetTick() - explosionStartTime) >= 5000)
+						{
+							currentState = COOLDOWN;    // Transition to COOLDOWN state
+							blinking = 0;               // Stop blinking LEDs
+							exploded = 0;               // Reset explosion flag for future use
+							cooldownStartTime = HAL_GetTick();
+						}
+
 					break;
 
 				case COOLDOWN:
 					blinking = 0;
 					HAL_GPIO_WritePin(GPIOA, LED_RED_Pin, 	GPIO_PIN_RESET);
-					HAL_GPIO_WritePin(GPIOA, LED_AMBER_Pin, GPIO_PIN_RESET);
-					//HAL_GPIO_WritePin(GPIOA, LED_GREEN_Pin, GPIO_PIN_SET);
+					SetAmberPWM(0);
+					HAL_GPIO_WritePin(GPIOA, LED_GREEN_Pin, GPIO_PIN_SET);
 					if ((HAL_GetTick() - cooldownStartTime) >= COOLDOWN_TIME) // 15 min cooldown
 						{
 							currentState = SAFE;
@@ -316,7 +327,7 @@ uint8_t getRandomNumber()
 void TurnOffAllLEDs()
 	{
 		HAL_GPIO_WritePin(LED_RED_GPIO_Port, LED_RED_Pin, GPIO_PIN_RESET);
-		HAL_GPIO_WritePin(LED_AMBER_GPIO_Port, LED_AMBER_Pin, GPIO_PIN_RESET);
+		SetAmberPWM(0);
 		HAL_GPIO_WritePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin, GPIO_PIN_RESET);
 	}
 
@@ -325,36 +336,20 @@ void PlayExplosionSound()
 	  DFPlayer_SendCommand(DFPLAYER_CMD_PLAY_TRACK, 0x00, getRandomNumber()); // Explosion sound
 	}
 
-uint8_t ReadPlaybackStatus(void)
-	{
-		uint8_t status_packet[10];
-		uint8_t status = 0xFF; 									// Default to an invalid value
-		DFPlayer_SendCommand(0x42, 0x00, 0x00);					// Send the status query command
-		if (HAL_UART_Receive(&huart2, status_packet, 10, 100) == HAL_OK) 		// Wait for the response from the DFPlayer Mini
-			{
-				if (status_packet[3] == 0x42 && status_packet[0] == 0x7E && status_packet[9] == 0xEF) 			// Ensure the response is valid and matches the query
-					{
-						status = status_packet[6]; // Extract the playback status (0x01 or 0x00)
-					}
-			}
-		return status; // Return playback status (0x01: Playing, 0x00: Stopped)
-	}
-
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 	{
 		static uint8_t led_state = 0;  // Track LED state
-//----------------------------------------------------------------------------------
-		if (htim->Instance == TIM2)
+		if (htim->Instance == TIM21)
 			{
 				if (blinking == 1)
 					{
 						if (led_state == 0)
 							{
-								HAL_GPIO_WritePin(GPIOA, LED_AMBER_Pin, GPIO_PIN_SET);   // Turn ON amber LED
+								SetAmberPWM(100);    // Turn ON amber LED
 								HAL_GPIO_WritePin(GPIOA, LED_RED_Pin, GPIO_PIN_RESET);  // Turn OFF red LED
 								led_state = 1;
 							} else {
-								HAL_GPIO_WritePin(GPIOA, LED_AMBER_Pin, GPIO_PIN_RESET); // Turn OFF amber LED
+								SetAmberPWM(0); // Turn OFF amber LED
 								HAL_GPIO_WritePin(GPIOA, LED_RED_Pin, GPIO_PIN_SET);     // Turn ON red LED
 								led_state = 0;
 							}
@@ -362,33 +357,6 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 			}
 	}
 
-void Timeout_CheckPlayback(void) //check every 100ms if the playback is off; if it's off for 500ms, then change state
-	{
-		static uint32_t last_check_time = 0;      								// Tracks the last check time
-		static uint32_t playback_stop_time = 0;  								// Tracks the time when playback was first detected as stopped
-		uint32_t current_time = HAL_GetTick();   								// Get the current system time in milliseconds
-		if ((current_time - last_check_time) >= 1000) 							// Check every 100ms
-			{
-				HAL_GPIO_WritePin(GPIOA, LED_GREEN_Pin, 0);
-				last_check_time = current_time; 								// Update last check time
-				playback_status = ReadPlaybackStatus();
-				HAL_GPIO_WritePin(GPIOA, LED_GREEN_Pin, playback_status);
-				if (playback_status == 0)										//if playback is still off, start counting time. After consecutive secods, change state to Cooldown
-					{
-						//
-						if (playback_stop_time == 0)
-							{
-								playback_stop_time = current_time; 							// Start tracking stop time
-							} else if ((current_time - playback_stop_time) >= 500) {
-								cooldownStartTime = HAL_GetTick(); 							// Start cooldown
-								currentState = COOLDOWN;               						// Playback has been stopped for 500ms
-								playback_stop_time = 0;      								// Reset stop time
-							}
-					} else {
-						playback_stop_time = 0;          									// Reset if playback is active
-					}
-			}
-	}
 
 void EXTI1_IRQHandler(void)
 	{
@@ -397,28 +365,39 @@ void EXTI1_IRQHandler(void)
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 	{
+		fuze_present = HAL_GPIO_ReadPin(GPIOB, Fuze_Pin);
 		if (GPIO_Pin == Fuze_Pin) 											// Handle interrupt for the specific pin
 			{
 				if (currentState == IDLE)  									// Pin pulled, arm the grenade
 					{
 						currentState = ARMED;
-						explosionStartTime = HAL_GetTick(); 					// Start explosion timer
+						ArmedStartTime = HAL_GetTick(); 					// Start explosion timer
 					} else if (currentState == SAFE) { 						// Pin reinserted, reset to IDLE
 						currentState = IDLE;
 					}
 			}
 	}
 
-void debugBlink(void)
-{
-	HAL_GPIO_WritePin(GPIOA, LED_RED_Pin, 	GPIO_PIN_SET);
-	HAL_GPIO_WritePin(GPIOA, LED_AMBER_Pin, GPIO_PIN_SET);
-	HAL_GPIO_WritePin(GPIOA, LED_GREEN_Pin, GPIO_PIN_SET);
-	HAL_Delay(1000);
-	HAL_GPIO_WritePin(GPIOA, LED_RED_Pin, 	GPIO_PIN_RESET);
-	HAL_GPIO_WritePin(GPIOA, LED_AMBER_Pin, GPIO_PIN_RESET);
-	HAL_GPIO_WritePin(GPIOA, LED_GREEN_Pin, GPIO_PIN_RESET);
-}
+void SetAmberPWM(uint8_t percentage)
+	{
+		if (percentage > 100) percentage = 100;  // Cap at 100%
+		uint32_t pulse = (percentage * 1000) / 100;  // Calculate pulse width
+		__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, pulse);  // Set duty cycle
+	}
+
+uint8_t CalculateDutyCycle(uint32_t elapsed_time, uint32_t time)
+	{
+		if (elapsed_time >= time) return 0; // Fully off when time exceeds TRIGGER_TIME
+		uint32_t remaining_time = TRIGGER_TIME - elapsed_time;
+		return RoundedDivision(remaining_time * 100, time); // Return duty cycle percentage
+	}
+
+
+uint32_t RoundedDivision(uint32_t numerator, uint32_t divisor)
+	{
+		return (numerator + (divisor / 2)) / divisor;
+	}
+
 
 /* USER CODE END 4 */
 

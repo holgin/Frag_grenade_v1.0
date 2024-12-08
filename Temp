@@ -1,0 +1,38 @@
+/*
+void Blink_LEDs(void)
+	{
+		if (explosion == 1)
+			{
+				uint32_t current_time = HAL_GetTick(); // Get the current system time in milliseconds
+				if ((current_time - last_blink_time) >= BLINK_INTERVAL)
+					{
+						last_blink_time = current_time; // Update the last toggle time
+						if (led_state == 0)
+							{
+								HAL_GPIO_WritePin(GPIOA, LED_AMBER_Pin, GPIO_PIN_SET);    // Turn ON PA0 (LED 1)
+								HAL_GPIO_WritePin(GPIOA, LED_RED_Pin, GPIO_PIN_RESET);  // Turn OFF PA1 (LED 2)
+								led_state = 1; // Update state
+							} else {
+								HAL_GPIO_WritePin(GPIOA, LED_AMBER_Pin, GPIO_PIN_RESET);  // Turn OFF PA0 (LED 1)
+								HAL_GPIO_WritePin(GPIOA, LED_RED_Pin, GPIO_PIN_SET);    // Turn ON PA1 (LED 2)
+								led_state = 0; // Update state
+							}
+					}
+			}
+	}
+	*/
+/*
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+	{
+		HAL_GPIO_TogglePin(GPIOA, LED_RED_Pin);
+		if (huart->Instance == USART2)  			// Validate the DFPlayer response
+			{
+				if (dma_rx_buffer[0] == 0x7E && dma_rx_buffer[3] == 0x42 && dma_rx_buffer[9] == 0xEF)
+					{
+						playback_status = dma_rx_buffer[6]; // Extract playback status
+					} else {
+						playback_status = 0xFF; // Invalid response
+					}
+			}
+	}
+*/
