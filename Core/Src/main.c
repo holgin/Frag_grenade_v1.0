@@ -69,6 +69,8 @@
 #define SHORT_COOLDOWN 				1000    // 1 second in milliseconds
 #define LONG_COOLDOWN  				900000  // 15 minutes in milliseconds
 #define TRIGGER_TIME 				4000	// in ms,
+#define TOGGLE_LIMIT				5
+#define TIME_WINDOW					3000	// in ms
 
 /* USER CODE END PD */
 

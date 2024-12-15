@@ -60,7 +60,7 @@ all: main-build
 main-build: Frag_grenade_v1.0.elf secondary-outputs
 
 dependents:
-	-cd C:/Users/PC/STM32CubeIDE/workspace_1.14.0/Frag_grenade_v1.0/Release && $(MAKE) all
+	-cd C:/Users/PC/STM32CubeIDE/workspace_1.14.0/Frag_grenade_v1.0/Release && $(MAKE) clean all
 
 # Tool invocations
 Frag_grenade_v1.0.elf Frag_grenade_v1.0.map: $(OBJS) $(USER_OBJS) C:/Users/PC/STM32CubeIDE/workspace_1.14.0/Frag_grenade_v1.0/Release/Frag_grenade_v1.0.elf C:\Users\PC\STM32CubeIDE\workspace_1.14.0\Frag_grenade_v1.0\STM32L011F4UX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)

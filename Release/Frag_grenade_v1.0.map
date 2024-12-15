@@ -86,17 +86,20 @@ Discarded input sections
  .text          0x00000000        0x0 ./Core/Src/main.o
  .data          0x00000000        0x0 ./Core/Src/main.o
  .bss           0x00000000        0x0 ./Core/Src/main.o
- .text.EXTI1_IRQHandler
-                0x00000000        0xa ./Core/Src/main.o
  .text.RoundedDivision
                 0x00000000        0xc ./Core/Src/main.o
+ .text.CheckFuzeToggles
+                0x00000000       0x60 ./Core/Src/main.o
+ .text.EXTI1_IRQHandler
+                0x00000000        0xe ./Core/Src/main.o
+ .bss.last_toggle_time
+                0x00000000        0x4 ./Core/Src/main.o
+ .bss.toggle_count
+                0x00000000        0x1 ./Core/Src/main.o
  .bss.last_query_time
                 0x00000000        0x4 ./Core/Src/main.o
  .data.playback_status
                 0x00000000        0x1 ./Core/Src/main.o
- .bss.dma_rx_buffer
-                0x00000000        0xa ./Core/Src/main.o
- .bss.status    0x00000000        0x1 ./Core/Src/main.o
  .bss.led_state
                 0x00000000        0x1 ./Core/Src/main.o
  .bss.last_blink_time
@@ -1695,89 +1698,93 @@ LOAD C:/ST/STM32CubeIDE_1.14.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.ext
                 0x08002530                        . = ALIGN (0x4)
                 0x08002530                        _sidata = LOADADDR (.data)
 
-.data           0x20000000       0x10 load address 0x08002530
+.data           0x20000000       0x14 load address 0x08002530
                 0x20000000                        . = ALIGN (0x4)
                 0x20000000                        _sdata = .
  *(.data)
  *(.data*)
- .data.seed     0x20000000        0x4 ./Core/Src/main.o
-                0x20000000                seed
+ .data.cooldown_time
+                0x20000000        0x4 ./Core/Src/main.o
+                0x20000000                cooldown_time
+ .data.seed     0x20000004        0x4 ./Core/Src/main.o
+                0x20000004                seed
  .data.SystemCoreClock
-                0x20000004        0x4 ./Core/Src/system_stm32l0xx.o
-                0x20000004                SystemCoreClock
+                0x20000008        0x4 ./Core/Src/system_stm32l0xx.o
+                0x20000008                SystemCoreClock
  .data.uwTickFreq
-                0x20000008        0x1 ./Drivers/STM32L0xx_HAL_Driver/Src/stm32l0xx_hal.o
-                0x20000008                uwTickFreq
- *fill*         0x20000009        0x3 
+                0x2000000c        0x1 ./Drivers/STM32L0xx_HAL_Driver/Src/stm32l0xx_hal.o
+                0x2000000c                uwTickFreq
+ *fill*         0x2000000d        0x3 
  .data.uwTickPrio
-                0x2000000c        0x4 ./Drivers/STM32L0xx_HAL_Driver/Src/stm32l0xx_hal.o
-                0x2000000c                uwTickPrio
+                0x20000010        0x4 ./Drivers/STM32L0xx_HAL_Driver/Src/stm32l0xx_hal.o
+                0x20000010                uwTickPrio
  *(.RamFunc)
  *(.RamFunc*)
-                0x20000010                        . = ALIGN (0x4)
-                0x20000010                        _edata = .
+                0x20000014                        . = ALIGN (0x4)
+                0x20000014                        _edata = .
 
-.igot.plt       0x20000010        0x0 load address 0x08002540
- .igot.plt      0x20000010        0x0 C:/ST/STM32CubeIDE_1.14.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.12.3.rel1.win32_1.1.0.202410251130/tools/bin/../lib/gcc/arm-none-eabi/12.3.1/thumb/v6-m/nofp/crtbegin.o
-                0x20000010                        . = ALIGN (0x4)
+.igot.plt       0x20000014        0x0 load address 0x08002544
+ .igot.plt      0x20000014        0x0 C:/ST/STM32CubeIDE_1.14.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.12.3.rel1.win32_1.1.0.202410251130/tools/bin/../lib/gcc/arm-none-eabi/12.3.1/thumb/v6-m/nofp/crtbegin.o
+                0x20000014                        . = ALIGN (0x4)
 
-.bss            0x20000010      0x188 load address 0x08002540
-                0x20000010                        _sbss = .
-                0x20000010                        __bss_start__ = _sbss
+.bss            0x20000014      0x188 load address 0x08002544
+                0x20000014                        _sbss = .
+                0x20000014                        __bss_start__ = _sbss
  *(.bss)
- .bss           0x20000010       0x1c C:/ST/STM32CubeIDE_1.14.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.12.3.rel1.win32_1.1.0.202410251130/tools/bin/../lib/gcc/arm-none-eabi/12.3.1/thumb/v6-m/nofp/crtbegin.o
+ .bss           0x20000014       0x1c C:/ST/STM32CubeIDE_1.14.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.12.3.rel1.win32_1.1.0.202410251130/tools/bin/../lib/gcc/arm-none-eabi/12.3.1/thumb/v6-m/nofp/crtbegin.o
  *(.bss*)
  .bss.led_state.0
-                0x2000002c        0x1 ./Core/Src/main.o
- *fill*         0x2000002d        0x3 
+                0x20000030        0x1 ./Core/Src/main.o
+ *fill*         0x20000031        0x3 
  .bss.refresh_time
-                0x20000030        0x4 ./Core/Src/main.o
-                0x20000030                refresh_time
- .bss.explosionStartTime
                 0x20000034        0x4 ./Core/Src/main.o
-                0x20000034                explosionStartTime
- .bss.ArmedStartTime
+                0x20000034                refresh_time
+ .bss.explosionStartTime
                 0x20000038        0x4 ./Core/Src/main.o
-                0x20000038                ArmedStartTime
- .bss.cooldownStartTime
+                0x20000038                explosionStartTime
+ .bss.ArmedStartTime
                 0x2000003c        0x4 ./Core/Src/main.o
-                0x2000003c                cooldownStartTime
- .bss.exploded  0x20000040        0x1 ./Core/Src/main.o
-                0x20000040                exploded
+                0x2000003c                ArmedStartTime
+ .bss.cooldownStartTime
+                0x20000040        0x4 ./Core/Src/main.o
+                0x20000040                cooldownStartTime
+ .bss.exploded  0x20000044        0x1 ./Core/Src/main.o
+                0x20000044                exploded
  .bss.fuze_present
-                0x20000041        0x1 ./Core/Src/main.o
-                0x20000041                fuze_present
- .bss.blinking  0x20000042        0x1 ./Core/Src/main.o
-                0x20000042                blinking
+                0x20000045        0x1 ./Core/Src/main.o
+                0x20000045                fuze_present
+ .bss.blinking  0x20000046        0x1 ./Core/Src/main.o
+                0x20000046                blinking
  .bss.currentState
-                0x20000043        0x1 ./Core/Src/main.o
-                0x20000043                currentState
- .bss.htim21    0x20000044       0x40 ./Core/Src/tim.o
-                0x20000044                htim21
- .bss.htim2     0x20000084       0x40 ./Core/Src/tim.o
-                0x20000084                htim2
+                0x20000047        0x1 ./Core/Src/main.o
+                0x20000047                currentState
+ .bss.htim21    0x20000048       0x40 ./Core/Src/tim.o
+                0x20000048                htim21
+ .bss.htim2     0x20000088       0x40 ./Core/Src/tim.o
+                0x20000088                htim2
  .bss.hdma_usart2_rx
-                0x200000c4       0x48 ./Core/Src/usart.o
-                0x200000c4                hdma_usart2_rx
- .bss.huart2    0x2000010c       0x88 ./Core/Src/usart.o
-                0x2000010c                huart2
- .bss.uwTick    0x20000194        0x4 ./Drivers/STM32L0xx_HAL_Driver/Src/stm32l0xx_hal.o
-                0x20000194                uwTick
+                0x200000c8       0x48 ./Core/Src/usart.o
+                0x200000c8                hdma_usart2_rx
+ .bss.huart2    0x20000110       0x88 ./Core/Src/usart.o
+                0x20000110                huart2
+ .bss.uwTick    0x20000198        0x4 ./Drivers/STM32L0xx_HAL_Driver/Src/stm32l0xx_hal.o
+                0x20000198                uwTick
  *(COMMON)
-                0x20000198                        . = ALIGN (0x4)
-                0x20000198                        _ebss = .
-                0x20000198                        __bss_end__ = _ebss
+                0x2000019c                        . = ALIGN (0x4)
+                0x2000019c                        _ebss = .
+                0x2000019c                        __bss_end__ = _ebss
 
 ._user_heap_stack
-                0x20000198      0x600 load address 0x08002540
-                0x20000198                        . = ALIGN (0x8)
+                0x2000019c      0x604 load address 0x08002544
+                0x200001a0                        . = ALIGN (0x8)
+ *fill*         0x2000019c        0x4 
                 [!provide]                        PROVIDE (end = .)
-                0x20000198                        PROVIDE (_end = .)
-                0x20000398                        . = (. + _Min_Heap_Size)
- *fill*         0x20000198      0x200 
-                0x20000798                        . = (. + _Min_Stack_Size)
- *fill*         0x20000398      0x400 
-                0x20000798                        . = ALIGN (0x8)
+                0x200001a0                        PROVIDE (_end = .)
+                0x200003a0                        . = (. + _Min_Heap_Size)
+ *fill*         0x200001a0      0x200 
+                0x200007a0                        . = (. + _Min_Stack_Size)
+ *fill*         0x200003a0      0x400 
+                0x200007a0                        . = ALIGN (0x8)
 
 /DISCARD/
  libc.a(*)
